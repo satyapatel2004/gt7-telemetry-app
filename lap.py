@@ -7,10 +7,11 @@ class Lap:
         self.laptime = laptime  
         self.coordinates = coordinates 
                 
+    # __repr__ function for logging purposes 
     def __repr__(self):
         if not self.lapno == 0:
 
             return f"Lapno: {self.lapno}, Laptime: {self.laptime}, Coordinates: {self.coordinates}"
                  
         else:
-            return "No Lap recorded:"
+            return "No Lap recorded:" 

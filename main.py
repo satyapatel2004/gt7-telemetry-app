@@ -4,6 +4,7 @@ import struct
 from datetime import timedelta
 from threading import Thread
 from typing import List
+import time 
 
 from lap import * 
 
@@ -118,75 +119,84 @@ class Data:
         
     def current_lap(self):
         return self.current_lap 
-    
-    #current lap setter:
-    
         
 
 #TODO: implement threading here, to prevent timeout. 
 class GT7Comms(Thread):
     """ Sets up the communication between the Playstation and the Computer """
-    def __init__(self):
-        Thread.__init__(self) 
-        self.send_port = 33739
-        self.receive_port = 33740 
-        self.playstation_ip = "255.255.255.255" 
-        self.daemon = True  
-        self._shall_run = True 
-        self.package_number = 0 
-        self.currlap = 0  
+    def __init__(self, send_port=33739, receive_port=33740, playstation_ip="255.255.255.255"):
+        super().__init__()
+        self.send_port = send_port
+        self.receive_port = receive_port
+        self.playstation_ip = playstation_ip
+        self.daemon = True
+        self._shall_run = True
+        self.package_number = 0
+        self.laps = []
+        self.current_lap = 0
+        self.last_process_time = time.time() 
+        self.current_lap_coordinates = [] 
+        self.xy_interval = 0.1 
 
-    def _send_hb(self, s):
-        # Implementation of _send_hb method
-        pass
+    def _send_hb(self, socket):
+        send_data = 'A'
+        socket.sendto(send_data.encode('utf-8'), (self.playstation_ip, self.send_port))
+        
+    def _processxy_(self):
+        if not self.current_data.is_paused:
+            x = self.current_data.position_x 
+            y = self.current_data.position_y
+            return (x,y)     
     
-    def run(self):
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
-        s.bind(('0.0.0.0', self.receive_port))
-        self._send_hb(s)
-        
-        current_lap = 0
-        
-        laps = []
-                
-        while self._shall_run:
-            data, address = s.recvfrom(4096)
-            self.package_number += 1
-
-            if self.package_number > 100:
-                self._send_hb(s)
-                self.package_number = 0
-
-            ddata = salsa20_dec(data)
-            if len(ddata) > 0 and struct.unpack('i', ddata[0x70:0x70 + 4])[0] > 0:
-                current_data = Data(ddata)
-                
-                if current_data.current_lap > current_lap :
-                    logging.info(f"Current Lap: {current_data.current_lap}")
-                    newlap = Lap(current_lap, current_data.last_lap)  
-                    laps.append(newlap) 
-                    current_lap = current_data.current_lap
-                    
-                    for i in range(len(laps)):
-                        logging.info(f"Lap: {laps[i]}")  
-                 
-                        
-                        
+    def _process_data(self):
+        current_time = time.time()
+        if current_time - self.last_process_time >= self.xy_interval: 
+            xytuple = self._processxy_()
             
+            if xytuple:
+                self.current_lap_coordinates.append(xytuple) 
+            
+            self.last_process_time = current_time
+        
+        
+        if self.current_data.current_lap > self.current_lap:
+            logging.info(f"Current Lap: {self.current_data.current_lap}")
+            new_lap = Lap(self.current_lap, self.current_data.last_lap, self.current_lap_coordinates) 
+            
+            self.laps.append(new_lap) 
+            self.current_lap_coordinates = [] 
+            
+            for lap in self.laps:
+                logging.info(f"Lap: {lap}")
+            
+            self.current_lap = self.current_data.current_lap 
+            
+
+                
+                
+    def run(self):
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s:
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+            s.bind(('0.0.0.0', self.receive_port))
+            self._send_hb(s)
+
+            while self._shall_run:
+                data, address = s.recvfrom(4096)
+                self.package_number += 1
+
+                if self.package_number > 100:
+                    self._send_hb(s)
+                    self.package_number = 0
+
+                ddata = salsa20_dec(data)
+                if len(ddata) > 0 and struct.unpack('i', ddata[0x70:0x70 + 4])[0] > 0:
+                    self.current_data = Data(ddata) 
+                    self._process_data() 
 
     def stop(self):
-        self._shall_run = False 
+        self._shall_run = False
     
-    #send a heartbeat to the PlayStation so it doesn't think we are inactive. 
-    def _send_hb(self, s):
-        send_data = 'A'
-        s.sendto(send_data.encode('utf-8'), (self.playstation_ip, self.send_port)) 
-        
-    
-    
-    
-            
+
 # data stream decoding
 def salsa20_dec(dat):
     try:

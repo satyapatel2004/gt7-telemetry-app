@@ -1,19 +1,15 @@
-import datetime
-import json
-import logging
-import math
+import logging 
 import socket
 import struct
-import time
-import copy
-import sys 
-import curses 
-import traceback
 from datetime import timedelta
 from threading import Thread
 from typing import List
 
+from lap import * 
+
 from salsa20 import Salsa20_xor
+
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s', datefmt='%Y-%m-%d %H:%M:%S')
 
 class Data:
     """ Object that represent the data being read from each packet """
@@ -119,54 +115,12 @@ class Data:
 
         self.is_paused = bin(struct.unpack('B', ddata[0x8E:0x8E + 1])[0])[-2] == '1'
         self.in_race = bin(struct.unpack('B', ddata[0x8E:0x8E + 1])[0])[-1] == '1'
-
-
-def display_throttle_bar(throttle):
-    # Define the maximum length of the throttle bar
-    max_length = 50  # For example, a bar of 50 characters
-    # Calculate the number of characters to display
-    filled_length = int(round(throttle / 100 * max_length))
-
-    # Create the bar string
-    bar = '#' * filled_length + '-' * (max_length - filled_length)
+        
+    def current_lap(self):
+        return self.current_lap 
     
-    # Clear the line and write the output with the throttle value and bar
-    sys.stdout.write(f"\r[{bar}]")
-    time.sleep(0.1)
-    sys.stdout.flush() 
+    #current lap setter:
     
-
-class Laps():
-    def __init__(self):
-        self.laps = []
-        self.best_time = self.laps[0] 
-        
-    def add_lap(self, lap):
-        self.laps.append(lap)
-        
-        if lap <= self.best_time:
-            self.best_time = lap 
-        
-
-class Lap():
-    def __init__(self):
-        self.time = 0 
-        self.x_positions = []
-        self.y_positions = []
-        self.z_positions = [] 
-        
-    def set_time(self, time):
-        self.time = time 
-        
-    def add_x(self, x):
-        self.x_positions.append(x) 
-        
-    def add_y(self, y):
-        self.y_positions.append(y)
-        
-    def add_z(self, z):
-        self.z_positions.append(z) 
-
         
 
 #TODO: implement threading here, to prevent timeout. 
@@ -180,15 +134,22 @@ class GT7Comms(Thread):
         self.daemon = True  
         self._shall_run = True 
         self.package_number = 0 
-        self.currlap = 0 
-            
+        self.currlap = 0  
+
+    def _send_hb(self, s):
+        # Implementation of _send_hb method
+        pass
+    
     def run(self):
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
         s.bind(('0.0.0.0', self.receive_port))
         self._send_hb(s)
-
-        laps = []  # Initialize outside the loop if laps should persist across packets
+        
+        current_lap = 0
+        
+        laps = []
+                
         while self._shall_run:
             data, address = s.recvfrom(4096)
             self.package_number += 1
@@ -201,23 +162,19 @@ class GT7Comms(Thread):
             if len(ddata) > 0 and struct.unpack('i', ddata[0x70:0x70 + 4])[0] > 0:
                 current_data = Data(ddata)
                 
-                sys.stdout.write(f"\rThrottle : {current_data.throttle}")
-                sys.stdout.flush()
-                
+                if current_data.current_lap > current_lap :
+                    logging.info(f"Current Lap: {current_data.current_lap}")
+                    newlap = Lap(current_lap, current_data.last_lap)  
+                    laps.append(newlap) 
+                    current_lap = current_data.current_lap
                     
-                """
-                if current_data.current_lap > self.currlap:
-                    current_lap = Lap()  # Only instantiate a new Lap if it's a new lap
-                    laps.append(current_lap)
-                    self.currlap += 1
-                    
-                    current_lap.add_x(current_data.position_x)
-                    current_lap.add_y(current_data.position_y)
-                    current_lap.add_z(current_data.position_z)
-                    
-                    # Update current_data here (not shown: ensure new data is processed) 
-                """  
-                
+                    for i in range(len(laps)):
+                        logging.info(f"Lap: {laps[i]}")  
+                 
+                        
+                        
+            
+
     def stop(self):
         self._shall_run = False 
     
@@ -225,8 +182,11 @@ class GT7Comms(Thread):
     def _send_hb(self, s):
         send_data = 'A'
         s.sendto(send_data.encode('utf-8'), (self.playstation_ip, self.send_port)) 
+        
+    
+    
+    
             
-
 # data stream decoding
 def salsa20_dec(dat):
     try:

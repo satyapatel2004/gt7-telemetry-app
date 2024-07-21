@@ -9,6 +9,7 @@ import queue
 import matplotlib.pyplot as plt
 import numpy as np 
 
+
 from lap import * 
 from data import Data 
 from salsa20 import Salsa20_xor
@@ -41,7 +42,11 @@ class GT7Comms(Thread):
             x = self.current_data.position_x 
             y = self.current_data.position_z
             z = self.current_data.position_y 
-            return (x,y,z)     
+            
+            braking = self.current_data.brake
+            throttle = self.current_data.throttle 
+            
+            return (x,y,z, braking, throttle)     
     
     def _process_data(self):
         current_time = time.time()
@@ -86,6 +91,7 @@ class GT7Comms(Thread):
                     self.package_number = 0
 
                 ddata = salsa20_dec(data)
+                
                 if len(ddata) > 0 and struct.unpack('i', ddata[0x70:0x70 + 4])[0] > 0:
                     self.current_data = Data(ddata) 
                     self._process_data() 
@@ -116,31 +122,6 @@ def salsa20_dec(dat):
         logging.info("ERROR")
 
 
-def plot_lap(data):
-    x, y, z = zip(*data)
-    # Convert y to numpy array for vectorized operations
-    y = np.array(y)
-
-    # Create a 3D plot
-    fig = plt.figure(figsize=(10, 6))
-    ax = fig.add_subplot(111, projection='3d')
-
-    # Plot the data
-    ax.plot(x, y, z, linestyle='-')
-
-    # Set labels
-    ax.set_xlabel('X-axis')
-    ax.set_ylabel('Y-axis')
-    ax.set_zlabel('Z-axis')
-
-    ax.set_zlim([min(x), max(x)]) 
-
-    # Show the plot
-    plt.title('3D Plot with Vertically Scaled Y-values')
-    plt.grid(True)
-    plt.show()
-
-
 if __name__ == "__main__":
     def new_lap_callback(lap):
         lap_queue.put(lap)  # Put the new lap into the queue
@@ -150,11 +131,14 @@ if __name__ == "__main__":
     gt7comms.start()
     
     try:
-        while True:
+        while gt7comms.is_alive:
             try:
                 new_lap = lap_queue.get(timeout=1)  # Wait for a new lap with a timeout
                 print(f"New Lap created! {new_lap.lapno}")
-                plot_lap(new_lap.coordinates)  # Plot the new lap
+                
+                if(new_lap and new_lap.coordinates):
+                    plot_lap(new_lap.coordinates, f"Lap: {new_lap.lapno}")  # Plot the new lap
+                    
             except queue.Empty:
                 continue
     except KeyboardInterrupt:

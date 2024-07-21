@@ -1,3 +1,7 @@
+import struct 
+from datetime import timedelta 
+
+
 class Data:
     """ Object that represent the data being read from each packet """
     def __init__(self,ddata): 

@@ -70,24 +70,10 @@ def plot_lap(data, base_filename="lap_plot"):
     # Set limits for better visualization
     ax.set_xlim([min(x), max(x)])
     ax.set_ylim([min(y), max(y)])
-    ax.set_zlim([min(z), max(z)])
+    ax.set_zlim(-200,200) 
 
     # Set title
     plt.title('Lap with Throttle and Braking Color Gradient')
     plt.grid(True)
-
-    # Define angles to save the plot
-    angles = [(30, 30), (0, 0), (90, 0), (0, 90), (45, 45)]
-    file_paths = []
-
-    # Loop through the angles, set the view, and save the plot
-    for i, angle in enumerate(angles):
-        ax.view_init(elev=angle[0], azim=angle[1])
-        filename = f"{base_filename}_{i}.png"
-        plt.savefig(filename)
-        file_paths.append(os.path.abspath(filename))
-
-    plt.close(fig)  # Close the figure to free memory
-
-    # Return the file paths
-    return file_paths
+    
+    return fig, plt, ax, base_filename

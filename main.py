@@ -9,7 +9,7 @@ import queue
 import matplotlib.pyplot as plt
 import numpy as np 
 
-
+from PIL import Image
 from lap import * 
 from data import Data 
 from salsa20 import Salsa20_xor
@@ -67,10 +67,7 @@ class GT7Comms(Thread):
                 self.laps.append(new_lap)
                 self.current_lap_coordinates = [] 
             
-            #DEBUG OUTPUT: REMOVE: 
-            for lap in self.laps:
-                logging.info(f"Lap: {lap}")
-            
+        
             self.current_lap = self.current_data.current_lap     
             
             if self.lap_callback:
@@ -121,7 +118,31 @@ def salsa20_dec(dat):
     except Exception as e:
         logging.info("ERROR")
 
+class HotLap:
+    def __init__(self, image_paths, coordinates, lapno, laptime): 
+        self.images = [Image.open(image_path) for image_path in image_paths]
+        self.coordinates = coordinates 
+        self.lapno = lapno 
+        self.laptime = laptime
+        pass 
+    
+def generate_images(fig, plt, ax, base_filename):
+    # Define angles to save the plot
+    angles = [(30, 30), (0, 0), (90, 0), (0, 90), (45, 45)]
+    file_paths = []
 
+    # Loop through the angles, set the view, and save the plot
+    for i, angle in enumerate(angles):
+        ax.view_init(elev=angle[0], azim=angle[1])
+        filename = f"{base_filename}_{i}.png"
+        plt.savefig(filename)
+        file_paths.append(os.path.abspath(filename))
+
+    plt.close(fig)  # Close the figure to free memory
+
+    # Return the file paths
+    return file_paths
+    
 if __name__ == "__main__":
     def new_lap_callback(lap):
         lap_queue.put(lap)  # Put the new lap into the queue
@@ -130,14 +151,20 @@ if __name__ == "__main__":
     gt7comms = GT7Comms(lap_callback=new_lap_callback)
     gt7comms.start()
     
+    hotlaps = []
+    
     try:
         while gt7comms.is_alive:
             try:
                 new_lap = lap_queue.get(timeout=1)  # Wait for a new lap with a timeout
                 print(f"New Lap created! {new_lap.lapno}")
-                
                 if(new_lap and new_lap.coordinates):
-                    plot_lap(new_lap.coordinates, f"Lap: {new_lap.lapno}")  # Plot the new lap
+                    fig, plt, ax, basename = plot_lap(new_lap.coordinates, f"Lap: {new_lap.lapno}") 
+                    image_paths = generate_images(fig, plt, ax, basename)  
+                    hotlap = HotLap(image_paths, new_lap.coordinates, new_lap.lapno, new_lap.laptime)
+                    hotlaps.append(hotlap) 
+                    
+                    logging.info(f"HOTLAPS: {hotlaps}") 
                     
             except queue.Empty:
                 continue

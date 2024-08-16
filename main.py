@@ -47,6 +47,10 @@ class GT7Comms(Thread):
             throttle = self.current_data.throttle 
             
             return (x,y,z, braking, throttle)     
+        
+    def _carspeed(self):
+        if not self.current_data.is_paused:
+            car_speed = self.current_data.car_speed 
     
     def _process_data(self):
         current_time = time.time()

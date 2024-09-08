@@ -4,3 +4,9 @@
 *.py[cod]
 *$py.class 
 *.png
+.DS_Store
+
+venv/
+node_modules/
+
+*.env

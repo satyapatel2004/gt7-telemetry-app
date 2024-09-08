@@ -1,0 +1,6 @@
+Flask==3.0.3
+matplotlib==3.9.2
+numpy==2.0.1
+Pillow==10.4.0
+Requests==2.32.3
+salsa20==0.3.0
